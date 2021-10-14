@@ -66,6 +66,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 char
   *progName,                         // Program name (for error reporting)
+  *command,                          // Command to run (default: 'shutdown -h now')
    sysfs_root[] = "/sys/class/gpio", // Location of Sysfs GPIO files
    running      = 1;                 // Signal handler will set to 0 (exit)
 int
@@ -178,8 +179,12 @@ int main(int argc, char *argv[]) {
 
 	if(argc > 1) pin = atoi(argv[1]);
 	// Second argument is the time (in milliseconds) that the button
-    	// should be kept pressed for shutdown to start
-    	if(argc > 2) debounceTime = debounceTime + atoi(argv[2]);
+   	// should be kept pressed for shutdown to start
+   	if(argc > 2) debounceTime = debounceTime + atoi(argv[2]);
+    // Third argument is the command to run.
+    // Default is 'shutdown -h now'
+    if(argc >3) command = argv[3];
+    else command = "shutdown -h now";
 
 	// If this is a "Revision 1" Pi board (no mounting holes),
 	// remap certain pin numbers for compatibility.
@@ -261,7 +266,7 @@ int main(int argc, char *argv[]) {
 			// Else timeout occurred
 		} else if(timeout == debounceTime) { // Button debounce timeout
 			if(pressed) {
-				(void)system("shutdown -h now");
+				(void)system(command);
 				running = 0;
 			}
 		}
