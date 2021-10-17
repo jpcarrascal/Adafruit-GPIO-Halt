@@ -66,7 +66,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 char
   *progName,                         // Program name (for error reporting)
-  *command,                          // Command to run (default: 'shutdown -h now')
+  *commandShort,                     // Command to run: short press
+  *commandLong,                      // Command to run: long press (default: 'shutdown -h now')
    sysfs_root[] = "/sys/class/gpio", // Location of Sysfs GPIO files
    running      = 1;                 // Signal handler will set to 0 (exit)
 int
@@ -74,7 +75,8 @@ int
 volatile unsigned int
   *gpio;                             // GPIO register table
 int
-   debounceTime = 20;                // 20 ms for button debouncing
+   debounceTime = 20,                // 20 ms for button debouncing
+   longPressTime = 0;
 
 
 // Some utility functions ------------------------------------------------
@@ -169,7 +171,8 @@ int main(int argc, char *argv[]) {
 	                       c;            // Pin input value ('0'/'1')
 	int                    fd,           // For mmap, sysfs, uinput
 	                       timeout = -1, // poll() timeout
-	                       pressed;      // Last-read pin state
+	                       pressed,      // Last-read pin state
+                           released = 0;
 	volatile unsigned char shortWait;    // Delay counter
 	struct pollfd          p;            // GPIO file descriptor
 
@@ -180,11 +183,13 @@ int main(int argc, char *argv[]) {
 	if(argc > 1) pin = atoi(argv[1]);
 	// Second argument is the time (in milliseconds) that the button
    	// should be kept pressed for shutdown to start
-   	if(argc > 2) debounceTime = debounceTime + atoi(argv[2]);
+   	if(argc > 2) longPressTime = atoi(argv[2]);
     // Third argument is the command to run.
     // Default is 'shutdown -h now'
-    if(argc >3) command = argv[3];
-    else command = "shutdown -h now";
+    if(argc > 3) commandLong = argv[3];
+    else commandLong = "shutdown -h now";
+    if(argc > 4) commandShort = argv[4];
+    else commandShort = "";
 
 	// If this is a "Revision 1" Pi board (no mounting holes),
 	// remap certain pin numbers for compatibility.
@@ -262,14 +267,23 @@ int main(int argc, char *argv[]) {
 				else if(c == '1') pressed = 0;
 				p.revents = 0; // Clear flag
 			}
-			timeout = debounceTime; // Set timeout for debounce
+            if(pressed)
+			    timeout = debounceTime + longPressTime; // Debounce + long press
+            else
+                timeout = debounceTime; // Set timeout for debounce
+            released = 1;
 			// Else timeout occurred
-		} else if(timeout == debounceTime) { // Button debounce timeout
+        } else if(timeout == debounceTime + longPressTime) { // Button debounce timeout
 			if(pressed) {
-				(void)system(command);
+				(void)system(commandLong);
 				running = 0;
 			}
-		}
+		} else if(timeout == debounceTime) {
+            if(released && commandShort[0]) {
+                (void)system(commandShort);
+                released = 0;
+            }
+        }
 	}
 
 	// ----------------------------------------------------------------
